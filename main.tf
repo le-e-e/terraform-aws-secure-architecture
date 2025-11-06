@@ -8,15 +8,11 @@ terraform {
     }
 
   }
+}
 
-
-## 나중에 환경변수로 설정할 예정
-##provider "aws" {
-##  region     = var.aws_region
-##  access_key = var.aws_access_key
-##  secret_key = var.aws_secret_key 
-##}
-
+# 엑세스는 aws configure로 이용
+provider "aws" {
+  region     = var.aws_region
 }
 
 module "vpc" {
@@ -38,11 +34,11 @@ module "guardduty" {
   tags                 = var.tags
 }
 
-module "cloudwatch" {
-    source = "./modules/cloudwatch"
+module "cloudwatch_to_s3" {
+  source = "./modules/cloudwatch_to_s3"
 
-    project_name         = var.project_name
-    log_group_name       = var.log_group_name
-    retention_in_days    = var.retention_in_days
-    tags                 = var.tags
+  project_name         = var.project_name
+  log_group_name       = var.log_group_name
+  retention_in_days    = var.retention_in_days
+  tags                 = var.tags
 }

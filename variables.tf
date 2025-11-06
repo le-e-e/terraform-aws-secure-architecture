@@ -1,5 +1,21 @@
 variable "project_name" {
   type        = string
+  default     = "aws-eks-security-architecture-in-terraform"
+}
+
+variable "aws_access_key" {
+  type        = string
+  default     = ""
+}
+
+variable "aws_secret_key" {
+  type        = string
+  default     = ""
+}
+
+variable "aws_region" {
+  type        = string
+  default     = "ap-northeast-2"
 }
 
 variable "vpc_cidr" {
@@ -20,12 +36,8 @@ variable "private_subnet_cidrs" {
 variable "tags" {
   description = "태그"
   type        = map(string)
+  default     = {}
 } 
-
-variable "aws_region" {
-  type        = string
-  default     = "ap-northeast-2"
-}
 
 variable "enable" {
   description = "GuardDuty 활성화 여부"
@@ -41,10 +53,71 @@ variable "finding_publishing_frequency" {
 
 variable "log_group_name" {
   type        = string
+  default     = "cloudwatch-to-s3-log-group"
 }
 
 variable "retention_in_days" {
   # CloudWatch 로그 보존 기간 일단위 (0은 무제한)
   type        = number
   default     = 7
+}
+
+variable "kms_key_id" {
+  type        = string
+  default     = ""
+}
+
+variable "filter_pattern" {
+  type        = string
+  default     = ""
+}
+
+variable "delivery_stream_name" {
+  type        = string
+  default     = "cloudwatch-to-s3-delivery-stream"
+}
+
+variable "cloudwatch_to_s3_role_name" {
+  type        = string
+  default     = "cloudwatch-to-s3-role"
+}
+
+variable "cloudwatch_to_s3_role_policy_name" {
+  type        = string
+  default     = "cloudwatch-to-s3-role-policy"
+}
+
+variable "kinesis_firehose_role_name" {
+  type        = string
+  default     = "kinesis-firehose-role"
+}
+
+variable "kinesis_firehose_role_policy_name" {
+  type        = string
+  default     = "kinesis-firehose-role-policy"
+}
+
+variable "bucket_name" {
+  type        = string
+  default     = "cloudwatch-to-s3-bucket-use-firehose-withlee"
+}
+
+variable "public_access_block" {
+  type        = bool
+  default     = true
+}
+
+variable "log_subscription_filter_name" {
+  type        = string
+  default     = "cloudwatch-to-s3-log-subscription-filter"
+}
+
+variable "cloudwatch_to_s3_role_arn" {
+  type        = string
+  default     = ""
+}
+
+variable "cloudwatch_to_s3_role_policy_arn" {
+  type        = string
+  default     = ""
 }
