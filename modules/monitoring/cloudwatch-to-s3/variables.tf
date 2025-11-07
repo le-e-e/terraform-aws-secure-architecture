@@ -57,11 +57,6 @@ variable "public_access_block" {
   default     = true  
 }
 
-variable "kms_key_id" {
-  type        = string
-  default     = ""
-}
-
 variable "log_subscription_filter_name" {
   type        = string
   default     = "cloudwatch-to-s3-log-subscription-filter"
@@ -100,4 +95,26 @@ variable "kinesis_firehose_role_name" {
 variable "kinesis_firehose_role_policy_name" {
   type        = string
   default     = "kinesis-firehose-role-policy"
+}
+
+variable "kms_key_name" {
+  type        = string
+  default     = "CW-KF-S3-Key"
+}
+
+
+variable "deletion_window_in_days" {
+  type        = number
+  default     = 30
+}
+
+variable "enable_key_rotation" {
+  type        = bool
+  default     = true
+}
+
+
+variable "cloudwatch_to_s3_kms_key_account_id" {
+  type        = string
+  default     = ""
 }

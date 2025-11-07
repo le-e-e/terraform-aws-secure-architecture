@@ -62,11 +62,6 @@ variable "retention_in_days" {
   default     = 7
 }
 
-variable "kms_key_id" {
-  type        = string
-  default     = ""
-}
-
 variable "filter_pattern" {
   type        = string
   default     = ""
@@ -120,4 +115,49 @@ variable "cloudwatch_to_s3_role_arn" {
 variable "cloudwatch_to_s3_role_policy_arn" {
   type        = string
   default     = ""
+}
+
+variable "cloudwatch_to_s3_account_id" {
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_bucket_kms_key_arn" {
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_bucket_kms_key_account_id" {
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_name" {
+  type        = string
+  default     = "cloudtrail-withlee"
+}
+
+variable "cloudtrail_bucket_name" {
+  type        = string
+  default     = "cloudtrail-s3-bucket-withlee"
+}
+
+variable "cloudtrail_s3_key_prefix" {
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_tags" {
+  type        = map(string)
+  default     = {}
+}
+
+variable "config_delivery_channel_s3_bucket_kms_key_account_id" {
+  type        = string
+  default     = ""
+}
+
+variable "config_delivery_channel_s3_bucket_name" {
+  type        = string
+  default     = "config-s3-bucket-withlee"
 }

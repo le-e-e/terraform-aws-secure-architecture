@@ -50,3 +50,27 @@ output "s3_bucket_arn" {
   value       = aws_s3_bucket.main.arn
 }
 
+output "kms_key_id" {
+  description = "KMS Key ID"
+  value       = aws_kms_key.main.id
+}
+
+output "kms_key_arn" {
+  description = "KMS Key ARN"
+  value       = aws_kms_key.main.arn
+}
+
+output "kms_key_policy" {
+  description = "KMS Key Policy"
+  value       = aws_kms_key.main.policy
+}
+
+output "deletion_window_in_days" {
+  description = "Deletion Window in Days"
+  value       = aws_kms_key.main.deletion_window_in_days
+}
+
+output "enable_key_rotation" {
+  description = "Enable Key Rotation"
+  value       = aws_kms_key.main.enable_key_rotation
+}

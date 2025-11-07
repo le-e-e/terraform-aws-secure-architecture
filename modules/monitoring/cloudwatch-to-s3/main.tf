@@ -3,8 +3,8 @@ resource "aws_cloudwatch_log_group" "main" {
   name              = var.log_group_name
   retention_in_days = var.retention_in_days
  
- # KMS에서 받아와야 함
-# kms_key_id = "arn:aws:kms:region:account:key/key-id"
+# KMS에서 받아와야 함
+   kms_key_id = aws_kms_key.main.id
 
   tags = merge(
     var.tags,
@@ -13,6 +13,8 @@ resource "aws_cloudwatch_log_group" "main" {
       Type = "CloudWatchLogs"
     }
   )
+  
+  depends_on = [aws_kms_key.main]
 }
 
 # kinesis firehose 전송 IAM 역할
@@ -37,9 +39,20 @@ resource "aws_iam_role_policy" "kinesis_firehose_role_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = ["s3:PutObject", "s3:GetBucketLocation", "s3:ListBucket"]
+      Action = ["s3:PutObject",
+                "s3:GetBucketLocation",
+                "s3:ListBucket",]
       Effect = "Allow"
-      Resource = "arn:aws:s3:::${var.bucket_name}/*"
+      Resource = ["arn:aws:s3:::${var.bucket_name}/*",
+                  "arn:aws:s3:::${var.bucket_name}"]
+    },
+    {
+      Action = ["kms:Encrypt",
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey"]
+      Effect = "Allow"
+      Resource = aws_kms_key.main.arn
     }]
   })
 }
@@ -51,6 +64,7 @@ resource "aws_kinesis_firehose_delivery_stream" "main" {
     extended_s3_configuration {
       bucket_arn = aws_s3_bucket.main.arn
       role_arn = aws_iam_role.kinesis_firehose_role.arn
+      kms_key_arn = aws_kms_key.main.arn
     }
   }
 
@@ -89,6 +103,14 @@ resource "aws_iam_role_policy" "cloudwatch_to_s3_role_policy" {
       Action = ["firehose:PutRecord", "firehose:PutRecordBatch"]
       Effect   = "Allow"
       Resource = aws_kinesis_firehose_delivery_stream.main.arn
+    },
+    {
+      Action = ["kms:Encrypt",
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey"]
+      Effect = "Allow"
+      Resource = aws_kms_key.main.arn
     }]
   })
 }
@@ -126,7 +148,72 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
   rule {
     apply_server_side_encryption_by_default {
       #  aws:kms는 유료
-      sse_algorithm = "AES256"
+      sse_algorithm = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.id
     }
   }
+}
+
+resource "aws_kms_key" "main" {
+  deletion_window_in_days = var.deletion_window_in_days
+  enable_key_rotation = var.enable_key_rotation
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid = "EnableRootAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.cloudwatch_to_s3_kms_key_account_id}:root"
+        }
+        Action = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid = "AllowCloudWatchLogsUseKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = "${var.cloudwatch_to_s3_kms_key_account_id}"
+          }
+        }
+      },
+      {
+        Sid = "AllowFirehoseUseKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "firehose.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = "${var.cloudwatch_to_s3_kms_key_account_id}"
+          }
+        }
+      }
+    ]
+  })
+  tags = merge(
+    var.tags,
+    {
+      Name = var.kms_key_name
+    }
+  )
 }
