@@ -25,19 +25,17 @@ variable "private_subnet_cidrs" {
 }
 
 variable "tags" {
-  description = "태그"
   type        = map(string)
   default     = {}
 } 
 
 variable "enable" {
-  description = "GuardDuty 활성화 여부"
   type        = bool
   default     = true
 }
 
 variable "finding_publishing_frequency" {
-  description = "GuardDuty 탐지 주기"
+  description = "FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS"
   type        = string
   default     = "FIFTEEN_MINUTES"
 }
@@ -167,4 +165,44 @@ variable "bad-ec2-isol-event-rule-name" {
 variable "bad-ec2-isol-iam-role-name" {
   type        = string
   default     = "bad-ec2-isol-lambda-role"
+}
+
+variable "auroraDB-name" {
+  type        = string
+  default     = "auroraDB"
+}
+
+variable "auroraDB-engine" {
+  type        = string
+  default     = "aurora-mysql"
+}
+
+variable "auroraDB-engine-version" {
+  type        = string
+  default     = "8.0.mysql_aurora.3.02.2"
+}
+
+variable "auroraDB-database-name" {
+  type        = string
+  default     = "auroraDB"
+}
+
+variable "auroraDB-master-username" {
+  type        = string
+  default     = "admin"
+}
+
+variable "auroraDB-master-password" {
+  type        = string
+  default     = "admin"
+}
+
+variable "auroraDB-backup-retention-period" {
+  type        = number
+  default     = 30
+}
+
+variable "go-to-deep-backup-vault-name" {
+  type        = string
+  default     = "go-to-deep-backup-vault"
 }

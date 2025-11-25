@@ -114,3 +114,24 @@ output "bad-ec2-isol-info" {
     iam_role_name = module.bad-ec2-isol.iam_role_name
   }
 }
+
+output "auroraDB-info" {
+  value = {
+    cluster_id = module.auroraDB.cluster_id
+    cluster_arn = module.auroraDB.cluster_arn
+    cluster_name = module.auroraDB.cluster_name
+    cluster_endpoint = module.auroraDB.cluster_endpoint
+    cluster_reader_endpoint = module.auroraDB.cluster_reader_endpoint
+  }
+}
+
+output "go-to-deep-info" {
+  value = {
+    lambda_function_arn = module.go-to-deep.lambda_function_arn
+    lambda_function_name = module.go-to-deep.lambda_function_name
+    event_rule_arn = module.go-to-deep.event_rule_arn
+    event_rule_name = module.go-to-deep.event_rule_name
+    iam_role_arn = module.go-to-deep.iam_role_arn
+    iam_role_name = module.go-to-deep.iam_role_name
+  }
+}

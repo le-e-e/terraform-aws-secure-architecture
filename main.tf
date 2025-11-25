@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
 }
 
@@ -115,4 +119,37 @@ module "bad-ec2-isol" {
   project_name = var.project_name
   tags = var.tags
   vpc_id = module.vpc.vpc_id
+}
+
+module "auroraDB" {
+  source = "./modules/infra/auroraDB"
+
+  name                      = "${var.project_name}-auroraDB"
+  engine                    = "aurora-mysql"
+  engine_version            = "8.0.mysql_aurora.3.02.2"
+  database_name             = "auroraDB"
+  backup_retention_period   = 30
+  preferred_backup_window   = "03:00-04:00"
+  
+  # 네트워크 설정
+  vpc_id                    = module.vpc.vpc_id
+  vpc_cidr                  = var.vpc_cidr
+  subnet_ids                = module.vpc.private_subnet_ids
+  
+  # EKS 접근 허용
+  allowed_security_group_ids = [module.EKS.node_security_group_id]
+  
+  # 인스턴스 설정
+  instance_class            = "db.t3.medium"
+  instance_count            = 2
+  
+  tags = var.tags
+}
+
+module "go-to-deep" {
+  source = "./modules/automation/go-to-deep"
+
+  backup_vault_name = module.auroraDB.backup_vault_name
+  project_name = var.project_name
+  tags = var.tags
 }
