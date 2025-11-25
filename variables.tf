@@ -3,15 +3,6 @@ variable "project_name" {
   default     = "aws-eks-security-architecture-in-terraform"
 }
 
-variable "aws_access_key" {
-  type        = string
-  default     = ""
-}
-
-variable "aws_secret_key" {
-  type        = string
-  default     = ""
-}
 
 variable "aws_region" {
   type        = string
@@ -107,15 +98,6 @@ variable "log_subscription_filter_name" {
   default     = "cloudwatch-to-s3-log-subscription-filter"
 }
 
-variable "cloudwatch_to_s3_role_arn" {
-  type        = string
-  default     = ""
-}
-
-variable "cloudwatch_to_s3_role_policy_arn" {
-  type        = string
-  default     = ""
-}
 
 variable "cloudwatch_to_s3_account_id" {
   type        = string
@@ -147,11 +129,6 @@ variable "cloudtrail_s3_key_prefix" {
   default     = ""
 }
 
-variable "cloudtrail_tags" {
-  type        = map(string)
-  default     = {}
-}
-
 variable "config_delivery_channel_s3_bucket_kms_key_account_id" {
   type        = string
   default     = ""
@@ -160,4 +137,34 @@ variable "config_delivery_channel_s3_bucket_kms_key_account_id" {
 variable "config_delivery_channel_s3_bucket_name" {
   type        = string
   default     = "config-s3-bucket-withlee"
+}
+
+variable "guardduty_s3_bucket_name" {
+  type        = string
+  default     = "guardduty-s3-bucket-withlee"
+}
+
+variable "guardduty_s3_bucket_kms_key_account_id" {
+  type        = string
+  default     = ""
+}
+
+variable "guardduty_kms_key_account_id" {
+  type        = string
+  default     = ""
+}
+
+variable "bad-ec2-isol-security-group-name" {
+  type        = string
+  default     = "isolation-security-group"
+}
+
+variable "bad-ec2-isol-event-rule-name" {
+  type        = string
+  default     = "bad-ec2-isol-rule"
+}
+
+variable "bad-ec2-isol-iam-role-name" {
+  type        = string
+  default     = "bad-ec2-isol-lambda-role"
 }

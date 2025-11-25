@@ -26,12 +26,40 @@ module "vpc" {
   tags                 = var.tags
 }
 
+module "EKS" {
+  source = "./modules/infra/EKS"
+
+  name = "${var.project_name}-eks"
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnet_ids
+  
+  # 엔드포인트 설정
+  endpoint_private_access = true
+  endpoint_public_access  = false
+  enable_cluster_creator_admin_permissions = true
+
+  eks_managed_node_groups = {
+    example = {
+      instance_types = ["t3.small"]
+      capacity_type = "SPOT"
+      min_size     = 1
+      max_size     = 3
+      desired_size = 2
+    }
+  }
+
+  tags = var.tags
+}
+
 module "guardduty" {
   source = "./modules/security/guardduty"
 
   project_name         = var.project_name
   enable               = var.enable
   finding_publishing_frequency = var.finding_publishing_frequency
+  guardduty_s3_bucket_name = var.guardduty_s3_bucket_name
+  guardduty_kms_key_account_id = var.guardduty_kms_key_account_id != "" ? var.guardduty_kms_key_account_id : data.aws_caller_identity.current.account_id
   tags                 = var.tags
 }
 
@@ -62,4 +90,29 @@ module "config" {
   config_delivery_channel_s3_bucket_name = var.config_delivery_channel_s3_bucket_name
   config_delivery_channel_s3_bucket_kms_key_account_id = var.config_delivery_channel_s3_bucket_kms_key_account_id != "" ? var.config_delivery_channel_s3_bucket_kms_key_account_id : data.aws_caller_identity.current.account_id
   tags = var.tags
+}
+
+
+# 정말 중요한 서비스에 대한 자동 복구 기능을 추가하고 싶다면 사용
+# 기본 모니터링은 비활성화가 불가능하므로 불필요한 요금 발생 가능
+#module "ec2-monitoring-heal" {
+#  source = "./modules/automation/ec2-monitoring-heal"
+#
+#  project_name = var.project_name
+#  tags         = var.tags
+#}
+
+module "s3-public-block" {
+  source = "./modules/automation/s3-public-block"
+
+  project_name = var.project_name
+  tags = var.tags
+}
+
+module "bad-ec2-isol" {
+  source = "./modules/automation/bad-ec2-isol"
+
+  project_name = var.project_name
+  tags = var.tags
+  vpc_id = module.vpc.vpc_id
 }

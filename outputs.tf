@@ -12,6 +12,12 @@ output "vpc_info" {
 output "guardduty_info" {
   value = {
     guardduty_detector_id = module.guardduty.guardduty_detector_id
+    guardduty_publishing_destination_id = module.guardduty.guardduty_publishing_destination_id
+    s3_bucket_id = module.guardduty.s3_bucket_id
+    s3_bucket_arn = module.guardduty.s3_bucket_arn
+    s3_bucket_name = module.guardduty.s3_bucket_name
+    kms_key_id = module.guardduty.kms_key_id
+    kms_key_arn = module.guardduty.kms_key_arn
   }
 }
 
@@ -56,5 +62,55 @@ output "config_info" {
     iam_role_name = module.config.iam_role_name
     kms_key_id = module.config.kms_key_id
     kms_key_arn = module.config.kms_key_arn
+  }
+}
+
+output "eks_info" {
+  value = {
+    cluster_id = module.eks.cluster_id
+    cluster_arn = module.eks.cluster_arn
+    cluster_name = module.eks.cluster_name
+    cluster_endpoint = module.eks.cluster_endpoint
+    cluster_version = module.eks.cluster_version
+    cluster_status = module.eks.cluster_status
+    cluster_oidc_issuer_url = module.eks.cluster_oidc_issuer_url
+    cluster_primary_security_group_id = module.eks.cluster_primary_security_group_id
+    cluster_security_group_id = module.eks.cluster_security_group_id
+    node_security_group_id = module.eks.node_security_group_id
+    cluster_iam_role_arn = module.eks.cluster_iam_role_arn
+    eks_managed_node_groups = module.eks.eks_managed_node_groups
+  }
+}
+
+output "ec2-monitoring-heal-info" {
+  value = {
+    lambda_function_arn = module.ec2-monitoring-heal.lambda_function_arn
+    lambda_function_name = module.ec2-monitoring-heal.lambda_function_name
+    event_rule_arn = module.ec2-monitoring-heal.event_rule_arn
+    event_rule_name = module.ec2-monitoring-heal.event_rule_name
+    iam_role_arn = module.ec2-monitoring-heal.iam_role_arn
+    iam_role_name = module.ec2-monitoring-heal.iam_role_name
+  }
+}
+
+output "s3-public-block-info" {
+  value = {
+    lambda_function_arn = module.s3-public-block.lambda_function_arn
+    lambda_function_name = module.s3-public-block.lambda_function_name
+    event_rule_arn = module.s3-public-block.event_rule_arn
+    event_rule_name = module.s3-public-block.event_rule_name
+    iam_role_arn = module.s3-public-block.iam_role_arn
+    iam_role_name = module.s3-public-block.iam_role_name
+  }
+}
+
+output "bad-ec2-isol-info" {
+  value = {
+    lambda_function_arn = module.bad-ec2-isol.lambda_function_arn
+    lambda_function_name = module.bad-ec2-isol.lambda_function_name
+    event_rule_arn = module.bad-ec2-isol.event_rule_arn
+    event_rule_name = module.bad-ec2-isol.event_rule_name
+    iam_role_arn = module.bad-ec2-isol.iam_role_arn
+    iam_role_name = module.bad-ec2-isol.iam_role_name
   }
 }

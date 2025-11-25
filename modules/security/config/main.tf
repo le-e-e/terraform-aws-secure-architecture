@@ -81,7 +81,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
     apply_server_side_encryption_by_default {
       #  aws:kms는 유료
       sse_algorithm = "aws:kms"
-      kms_master_key_id = aws_kms_key.config.id
+      kms_master_key_id = aws_kms_key.config.arn
     }
   }
 }

@@ -2,6 +2,8 @@ resource "aws_cloudtrail" "main" {
     name = var.cloudtrail_name
     s3_bucket_name = var.cloudtrail_bucket_name
     s3_key_prefix = var.cloudtrail_s3_key_prefix
+    is_multi_region_trail = true
+    enable_logging = true
     tags = var.tags
     depends_on = [aws_s3_bucket.cloudtrail_bucket, aws_s3_bucket_policy.cloudtrail_bucket]
 }

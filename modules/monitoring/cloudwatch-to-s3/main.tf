@@ -1,10 +1,75 @@
+resource "aws_kms_key" "main" {
+  deletion_window_in_days = var.deletion_window_in_days
+  enable_key_rotation = var.enable_key_rotation
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid = "EnableRootAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.cloudwatch_to_s3_kms_key_account_id}:root"
+        }
+        Action = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid = "AllowCloudWatchLogsUseKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = "${var.cloudwatch_to_s3_kms_key_account_id}"
+          }
+        }
+      },
+      {
+        Sid = "AllowFirehoseUseKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "firehose.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = "${var.cloudwatch_to_s3_kms_key_account_id}"
+          }
+        }
+      }
+    ]
+  })
+  tags = merge(
+    var.tags,
+    {
+      Name = var.kms_key_name
+    }
+  )
+}
+
+
 # CloudWatch 로그 그룹 생성
 resource "aws_cloudwatch_log_group" "main" {
   name              = var.log_group_name
   retention_in_days = var.retention_in_days
  
 # KMS에서 받아와야 함
-   kms_key_id = aws_kms_key.main.id
+   kms_key_id = aws_kms_key.main.arn
 
   tags = merge(
     var.tags,
@@ -152,68 +217,4 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
       kms_master_key_id = aws_kms_key.main.id
     }
   }
-}
-
-resource "aws_kms_key" "main" {
-  deletion_window_in_days = var.deletion_window_in_days
-  enable_key_rotation = var.enable_key_rotation
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid = "EnableRootAccess"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.cloudwatch_to_s3_kms_key_account_id}:root"
-        }
-        Action = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid = "AllowCloudWatchLogsUseKey"
-        Effect = "Allow"
-        Principal = {
-          Service = "logs.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = "${var.cloudwatch_to_s3_kms_key_account_id}"
-          }
-        }
-      },
-      {
-        Sid = "AllowFirehoseUseKey"
-        Effect = "Allow"
-        Principal = {
-          Service = "firehose.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = "${var.cloudwatch_to_s3_kms_key_account_id}"
-          }
-        }
-      }
-    ]
-  })
-  tags = merge(
-    var.tags,
-    {
-      Name = var.kms_key_name
-    }
-  )
 }
