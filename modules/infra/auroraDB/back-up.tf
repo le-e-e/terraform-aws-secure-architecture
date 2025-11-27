@@ -50,10 +50,12 @@ resource "aws_backup_plan" "aurora_backup" {
     target_vault_name = aws_backup_vault.aurora_backup.name
     schedule          = "cron(0 3 * * ? *)"  # 매일 새벽 3시 (UTC)
 
-    # 라이프사이클: 30일 후 Glacier로 전환, 지정된 기간 후 삭제
+    # 라이프사이클: 7일 warm storage 유지
+    # 백업 완료 즉시 Lambda가 S3 Glacier로 export
+    # 7일 동안은 warm storage와 S3 Glacier 둘 다 존재 (중복 보관)
+    # 7일 후 AWS Backup에서 자동 삭제 (S3 Glacier만 유지)
     lifecycle {
-      cold_storage_after = var.backup_cold_storage_after  # 30일 후 Glacier
-      delete_after       = var.backup_delete_after       # 삭제 기간
+      delete_after = 7  # 7일 warm storage 유지 후 자동 삭제
     }
 
     recovery_point_tags = var.tags

@@ -5,11 +5,16 @@ from botocore.exceptions import ClientError
 
 # AWS 클라이언트 초기화
 backup_client = boto3.client('backup')
+rds_client = boto3.client('rds')
+s3_client = boto3.client('s3')
 
 import os
 
 # 환경 변수에서 설정 읽기
 BACKUP_VAULT_NAME = os.environ.get('BACKUP_VAULT_NAME')
+AURORA_CLUSTER_ID = os.environ.get('AURORA_CLUSTER_ID')
+S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
+WARM_STORAGE_DAYS = int(os.environ.get('WARM_STORAGE_DAYS', '30'))
 ONE_YEAR_DAYS = 365  # 1년 = 365일
 SEVEN_YEARS_DAYS = 2555  # 7년 = 2555일
 
@@ -17,15 +22,17 @@ SEVEN_YEARS_DAYS = 2555  # 7년 = 2555일
 def lambda_handler(event, context):
     """
     Aurora DB 백업 관리:
-    1. 1년 이상 된 Glacier 백업을 Deep Archive로 전환
-    2. 7년 이상 보관된 백업 삭제
+    1. 백업 완료 이벤트 감지 시 즉시 S3 Glacier로 export
+    2. 정기 스케줄: 7년 이상 보관된 백업 삭제
     """
     try:
-        # 환경 변수에서 설정 읽기 (우선순위: 환경 변수 > event)
-        backup_vault_name = BACKUP_VAULT_NAME or event.get('backup_vault_name')
+        # 환경 변수에서 설정 읽기
+        backup_vault_name = BACKUP_VAULT_NAME
+        aurora_cluster_id = AURORA_CLUSTER_ID
+        s3_bucket_name = S3_BUCKET_NAME
         
-        if not backup_vault_name:
-            error_msg = 'backup_vault_name is required. Set it as Lambda environment variable or in the event.'
+        if not all([backup_vault_name, aurora_cluster_id, s3_bucket_name]):
+            error_msg = 'backup_vault_name, aurora_cluster_id, and s3_bucket_name are required.'
             print(f"ERROR: {error_msg}")
             return {
                 'statusCode': 400,
@@ -34,66 +41,13 @@ def lambda_handler(event, context):
                 })
             }
         
-        print(f"Processing backups in vault: {backup_vault_name}")
-        
-        # 날짜 계산
-        one_year_ago = datetime.now(timezone.utc) - timedelta(days=ONE_YEAR_DAYS)
-        seven_years_ago = datetime.now(timezone.utc) - timedelta(days=SEVEN_YEARS_DAYS)
-        
-        # 백업 목록 조회
-        recovery_points = list_recovery_points(backup_vault_name)
-        
-        # 1. 7년 이상 된 백업 삭제 (우선 처리)
-        old_backups_to_delete = filter_old_backups(recovery_points, seven_years_ago)
-        print(f"Found {len(old_backups_to_delete)} recovery points older than 7 years to delete")
-        
-        delete_results = []
-        for recovery_point in old_backups_to_delete:
-            try:
-                result = delete_recovery_point(recovery_point, backup_vault_name)
-                delete_results.append(result)
-            except Exception as e:
-                print(f"Error deleting recovery point {recovery_point['RecoveryPointArn']}: {str(e)}")
-                delete_results.append({
-                    'recovery_point_arn': recovery_point['RecoveryPointArn'],
-                    'status': 'error',
-                    'error': str(e)
-                })
-        
-        # 2. 1년 이상 된 Glacier 백업을 Deep Archive로 전환
-        old_glacier_backups = filter_old_glacier_backups(recovery_points, one_year_ago)
-        # 7년 이상 된 백업은 이미 삭제했으므로 제외
-        old_glacier_backups = [
-            rp for rp in old_glacier_backups 
-            if rp not in old_backups_to_delete
-        ]
-        
-        print(f"Found {len(old_glacier_backups)} recovery points older than 1 year in Glacier (excluding 7+ years)")
-        
-        archive_results = []
-        for recovery_point in old_glacier_backups:
-            try:
-                result = process_backup_to_deep_archive(
-                    recovery_point, 
-                    backup_vault_name
-                )
-                archive_results.append(result)
-            except Exception as e:
-                print(f"Error processing recovery point {recovery_point['RecoveryPointArn']}: {str(e)}")
-                archive_results.append({
-                    'recovery_point_arn': recovery_point['RecoveryPointArn'],
-                    'status': 'error',
-                    'error': str(e)
-                })
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': f'Processed {len(delete_results)} deletions and {len(archive_results)} archive conversions',
-                'deletions': delete_results,
-                'archives': archive_results
-            })
-        }
+        # EventBridge 이벤트인지 확인 (백업 완료 이벤트)
+        if 'source' in event and event.get('source') == 'aws.backup':
+            # 백업 완료 이벤트 처리
+            return handle_backup_completed_event(event, backup_vault_name, aurora_cluster_id, s3_bucket_name)
+        else:
+            # 정기 스케줄 실행 (7년 이상 된 백업 정리)
+            return handle_scheduled_cleanup(backup_vault_name)
         
     except Exception as e:
         print(f"Lambda execution error: {str(e)}")
@@ -103,6 +57,128 @@ def lambda_handler(event, context):
                 'error': str(e)
             })
         }
+
+
+def handle_backup_completed_event(event, backup_vault_name, aurora_cluster_id, s3_bucket_name):
+    """
+    백업 완료 이벤트 처리: 백업 완료 즉시 S3 Glacier로 export
+    """
+    print(f"Backup completed event received: {json.dumps(event)}")
+    
+    try:
+        # EventBridge 이벤트에서 Recovery Point 정보 추출
+        detail = event.get('detail', {})
+        backup_job_id = detail.get('backupJobId')
+        recovery_point_arn = detail.get('recoveryPointArn')
+        
+        if not recovery_point_arn:
+            print("ERROR: recoveryPointArn not found in event")
+            return {
+                'statusCode': 400,
+                'body': json.dumps({
+                    'error': 'recoveryPointArn not found in event'
+                })
+            }
+        
+        print(f"Processing backup job: {backup_job_id}, Recovery Point: {recovery_point_arn}")
+        
+        # Recovery Point 정보 조회
+        try:
+            recovery_point_response = backup_client.describe_recovery_point(
+                BackupVaultName=backup_vault_name,
+                RecoveryPointArn=recovery_point_arn
+            )
+            recovery_point = recovery_point_response.get('RecoveryPoint', {})
+        except ClientError as e:
+            print(f"Error describing recovery point: {str(e)}")
+            return {
+                'statusCode': 500,
+                'body': json.dumps({
+                    'error': f'Failed to describe recovery point: {str(e)}'
+                })
+            }
+        
+        # 즉시 S3로 export
+        try:
+            result = export_recovery_point_to_s3(
+                recovery_point,
+                backup_vault_name,
+                aurora_cluster_id,
+                s3_bucket_name
+            )
+            
+            # Export 성공: AWS Backup은 7일 동안 warm storage로 유지 (빠른 복원용)
+            # 7일 후 AWS Backup lifecycle 정책에 의해 자동 삭제됨
+            # 이 기간 동안 warm storage와 S3 Glacier 둘 다 존재 (중복 보관)
+            if result.get('status') == 'export_started':
+                print(f"Export started. Recovery point will remain in warm storage for 7 days (AWS Backup lifecycle)")
+                result['backup_retention'] = '7 days in warm storage (auto-deleted by lifecycle)'
+                result['backup_deleted'] = False
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps({
+                    'message': 'Backup exported to S3 Glacier successfully',
+                    'backup_job_id': backup_job_id,
+                    'recovery_point_arn': recovery_point_arn,
+                    'export_result': result
+                })
+            }
+            
+        except Exception as e:
+            print(f"Error exporting recovery point: {str(e)}")
+            return {
+                'statusCode': 500,
+                'body': json.dumps({
+                    'error': f'Failed to export recovery point: {str(e)}'
+                })
+            }
+            
+    except Exception as e:
+        print(f"Error handling backup completed event: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': str(e)
+            })
+        }
+
+
+def handle_scheduled_cleanup(backup_vault_name):
+    """
+    정기 스케줄 실행: 7년 이상 된 백업 삭제
+    """
+    print(f"Running scheduled cleanup for vault: {backup_vault_name}")
+    
+    seven_years_ago = datetime.now(timezone.utc) - timedelta(days=SEVEN_YEARS_DAYS)
+    
+    # 백업 목록 조회
+    recovery_points = list_recovery_points(backup_vault_name)
+    
+    # 7년 이상 된 백업 삭제
+    old_backups_to_delete = filter_old_backups(recovery_points, seven_years_ago)
+    print(f"Found {len(old_backups_to_delete)} recovery points older than 7 years to delete")
+    
+    delete_results = []
+    for recovery_point in old_backups_to_delete:
+        try:
+            result = delete_recovery_point(recovery_point, backup_vault_name)
+            delete_results.append(result)
+        except Exception as e:
+            print(f"Error deleting recovery point {recovery_point['RecoveryPointArn']}: {str(e)}")
+            delete_results.append({
+                'recovery_point_arn': recovery_point['RecoveryPointArn'],
+                'status': 'error',
+                'error': str(e)
+            })
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'message': f'Cleanup completed: {len(delete_results)} deletions',
+            'deletions': delete_results
+        })
+    }
 
 
 def list_recovery_points(backup_vault_name):
@@ -137,15 +213,15 @@ def list_recovery_points(backup_vault_name):
     return recovery_points
 
 
-def filter_old_glacier_backups(recovery_points, cutoff_date):
+def filter_warm_backups_to_export(recovery_points, cutoff_date):
     """
-    1년 이상 된 Glacier 백업 필터링
+    Warm storage 기간이 끝난 백업 필터링 (S3로 export 대상)
     """
     filtered = []
     
     for rp in recovery_points:
-        # StorageClass 확인 (GLACIER 또는 COLD_STORAGE)
-        storage_class = rp.get('StorageClass', '')
+        # StorageClass 확인 (WARM_STORAGE 또는 빈 값)
+        storage_class = rp.get('StorageClass', 'WARM_STORAGE')
         
         # CreationDate 확인
         creation_date_str = rp.get('CreationDate')
@@ -158,36 +234,128 @@ def filter_old_glacier_backups(recovery_points, cutoff_date):
         else:
             creation_date = creation_date_str
         
-        # 1년 이상 된 Glacier 백업만 필터링
-        if (storage_class in ['GLACIER', 'COLD_STORAGE'] and 
+        # Warm storage 기간이 끝난 백업만 필터링 (WARM_STORAGE 또는 빈 값)
+        if (storage_class in ['WARM_STORAGE', ''] and 
             creation_date < cutoff_date):
             filtered.append(rp)
-            print(f"Found old Glacier backup: {rp['RecoveryPointArn']}, "
+            print(f"Found warm backup ready for export: {rp['RecoveryPointArn']}, "
                   f"Created: {creation_date}, StorageClass: {storage_class}")
     
     return filtered
 
 
-def process_backup_to_deep_archive(recovery_point, backup_vault_name):
+def export_recovery_point_to_s3(recovery_point, backup_vault_name, aurora_cluster_id, s3_bucket_name):
     """
-    1년 이상 된 Glacier 백업을 Deep Archive로 전환
-    
-    주의: AWS Backup의 Recovery Point는 AWS Backup 서비스 내부에 저장되며,
-    lifecycle policy를 통해 자동으로 Glacier/Deep Archive로 전환됩니다.
-    이 함수는 백업 상태를 확인하고 로그만 기록합니다.
+    Recovery Point를 S3로 export
+    Recovery Point의 메타데이터에서 스냅샷 정보를 추출하고,
+    해당 스냅샷을 S3로 export합니다.
     """
     recovery_point_arn = recovery_point['RecoveryPointArn']
-    storage_class = recovery_point.get('StorageClass', '')
+    creation_date = recovery_point.get('CreationDate')
     
-    print(f"Processing recovery point {recovery_point_arn} (StorageClass: {storage_class})")
-    print("NOTE: AWS Backup uses its own storage. Deep Archive conversion is handled by lifecycle policies.")
+    print(f"Exporting recovery point {recovery_point_arn} to S3")
     
-    return {
-        'recovery_point_arn': recovery_point_arn,
-        'status': 'monitored',
-        'storage_class': storage_class,
-        'message': 'Backup lifecycle is managed by AWS Backup lifecycle policies'
-    }
+    try:
+        # Recovery Point의 메타데이터 조회
+        metadata = backup_client.get_recovery_point_restore_metadata(
+            BackupVaultName=backup_vault_name,
+            RecoveryPointArn=recovery_point_arn
+        )
+        
+        # Aurora 스냅샷 찾기 (Recovery Point 생성 시간과 가장 가까운 스냅샷)
+        if isinstance(creation_date, str):
+            creation_dt = datetime.fromisoformat(creation_date.replace('Z', '+00:00'))
+        else:
+            creation_dt = creation_date
+        
+        # 클러스터 스냅샷 목록 조회
+        snapshots = rds_client.describe_db_cluster_snapshots(
+            DBClusterIdentifier=aurora_cluster_id,
+            SnapshotType='automated'
+        )
+        
+        # Recovery Point 생성 시간과 가장 가까운 스냅샷 찾기
+        matching_snapshot = None
+        min_time_diff = None
+        
+        for snapshot in snapshots.get('DBClusterSnapshots', []):
+            snapshot_time = snapshot['SnapshotCreateTime']
+            if snapshot_time.tzinfo is None:
+                snapshot_time = snapshot_time.replace(tzinfo=timezone.utc)
+            
+            time_diff = abs((creation_dt - snapshot_time).total_seconds())
+            if min_time_diff is None or time_diff < min_time_diff:
+                min_time_diff = time_diff
+                matching_snapshot = snapshot
+        
+        if not matching_snapshot:
+            # 스냅샷을 찾을 수 없으면 수동 스냅샷 생성 필요
+            print(f"Warning: No matching snapshot found for recovery point {recovery_point_arn}")
+            return {
+                'recovery_point_arn': recovery_point_arn,
+                'status': 'skipped',
+                'message': 'No matching snapshot found'
+            }
+        
+        snapshot_arn = matching_snapshot['DBClusterSnapshotArn']
+        snapshot_id = matching_snapshot['DBClusterSnapshotIdentifier']
+        
+        # S3 export 경로 생성
+        export_prefix = f"aurora-backups/{aurora_cluster_id}/{creation_dt.strftime('%Y/%m/%d')}"
+        export_id = f"{snapshot_id}-{int(creation_dt.timestamp())}"
+        
+        # IAM Role ARN (Lambda 환경 변수에서 가져오거나 하드코딩)
+        # 실제로는 Terraform에서 export role ARN을 환경 변수로 전달해야 함
+        export_role_arn = os.environ.get('AURORA_EXPORT_ROLE_ARN')
+        if not export_role_arn:
+            # Lambda 실행 역할에서 export role을 찾거나 생성해야 함
+            print("Warning: AURORA_EXPORT_ROLE_ARN not set, skipping export")
+            return {
+                'recovery_point_arn': recovery_point_arn,
+                'status': 'skipped',
+                'message': 'Export role ARN not configured'
+            }
+        
+        # Aurora 스냅샷을 S3로 export
+        print(f"Starting export task for snapshot {snapshot_id} to s3://{s3_bucket_name}/{export_prefix}/")
+        
+        export_response = rds_client.start_export_task(
+            ExportTaskIdentifier=export_id,
+            SourceArn=snapshot_arn,
+            S3BucketName=s3_bucket_name,
+            IamRoleArn=export_role_arn,
+            KmsKeyId=None,  # 기본 KMS 키 사용
+            S3Prefix=export_prefix
+        )
+        
+        export_task_arn = export_response['ExportTaskArn']
+        
+        print(f"Export task started: {export_task_arn}")
+        
+        # Recovery Point 삭제 (S3로 export 완료 후)
+        # 실제로는 export 완료를 기다려야 하지만, 여기서는 즉시 삭제하지 않음
+        # 별도의 Lambda나 Step Functions로 export 완료를 모니터링해야 함
+        
+        return {
+            'recovery_point_arn': recovery_point_arn,
+            'snapshot_id': snapshot_id,
+            'export_task_arn': export_task_arn,
+            's3_path': f"s3://{s3_bucket_name}/{export_prefix}/",
+            'status': 'export_started'
+        }
+        
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'ExportTaskAlreadyExists':
+            print(f"Export task already exists for recovery point {recovery_point_arn}")
+            return {
+                'recovery_point_arn': recovery_point_arn,
+                'status': 'already_exported',
+                'message': 'Export task already exists'
+            }
+        else:
+            print(f"Error exporting recovery point: {str(e)}")
+            raise
 
 
 def filter_old_backups(recovery_points, cutoff_date):

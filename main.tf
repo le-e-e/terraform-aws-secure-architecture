@@ -4,7 +4,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 6.15"
     }
     random = {
       source  = "hashicorp/random"
@@ -150,6 +150,14 @@ module "go-to-deep" {
   source = "./modules/automation/go-to-deep"
 
   backup_vault_name = module.auroraDB.backup_vault_name
+  backup_vault_arn  = module.auroraDB.backup_vault_arn
+  aurora_cluster_id = module.auroraDB.cluster_id
   project_name = var.project_name
   tags = var.tags
+}
+
+module "vpc_flow_logs" {
+  source = "./modules/monitoring/vpmc-flow-logs"
+
+  
 }
