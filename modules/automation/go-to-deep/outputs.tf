@@ -11,7 +11,7 @@ output "lambda_role_arn" {
 }
 
 output "event_rule_arn" {
-  value = aws_cloudwatch_event_rule.go_to_deep.arn
+  value = aws_cloudwatch_event_rule.go_to_deep_cleanup.arn
 }
 
 output "s3_bucket_name" {

@@ -95,8 +95,8 @@ locals {
 }
 
 # Aurora Cluster 생성
-resource "aws_aurora_cluster" "main" {
-  name                      = var.name
+resource "aws_rds_cluster" "main" {
+  cluster_identifier        = var.name
   engine                    = var.engine
   engine_version            = var.engine_version
   database_name             = var.database_name
@@ -141,10 +141,10 @@ resource "aws_db_subnet_group" "main" {
 }
 
 # Aurora Cluster Instance 생성
-resource "aws_aurora_cluster_instance" "main" {
+resource "aws_rds_cluster_instance" "main" {
   count = var.instance_count
 
-  cluster_identifier = aws_aurora_cluster.main.id
+  cluster_identifier = aws_rds_cluster.main.id
   instance_class    = var.instance_class
   engine            = var.engine
   engine_version    = var.engine_version

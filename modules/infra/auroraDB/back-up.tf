@@ -71,7 +71,7 @@ resource "aws_backup_selection" "aurora_backup" {
   plan_id      = aws_backup_plan.aurora_backup.id
 
   resources = [
-    aws_aurora_cluster.main.arn
+    aws_rds_cluster.main.arn
   ]
 
   selection_tag {

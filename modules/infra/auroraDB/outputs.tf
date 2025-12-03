@@ -1,25 +1,25 @@
 output "cluster_id" {
-  value = aws_aurora_cluster.main.id
+  value = aws_rds_cluster.main.id
 }
 
 output "cluster_arn" {
-  value = aws_aurora_cluster.main.arn
+  value = aws_rds_cluster.main.arn
 }
 
 output "cluster_endpoint" {
-  value = aws_aurora_cluster.main.endpoint
+  value = aws_rds_cluster.main.endpoint
 }
 
 output "cluster_reader_endpoint" {
-  value = aws_aurora_cluster.main.reader_endpoint
+  value = aws_rds_cluster.main.reader_endpoint
 }
 
 output "cluster_database_name" {
-  value = aws_aurora_cluster.main.database_name
+  value = aws_rds_cluster.main.database_name
 }
 
 output "cluster_port" {
-  value = aws_aurora_cluster.main.port
+  value = aws_rds_cluster.main.port
 }
 
 output "backup_vault_arn" {

@@ -67,31 +67,32 @@ output "config_info" {
 
 output "eks_info" {
   value = {
-    cluster_id = module.eks.cluster_id
-    cluster_arn = module.eks.cluster_arn
-    cluster_name = module.eks.cluster_name
-    cluster_endpoint = module.eks.cluster_endpoint
-    cluster_version = module.eks.cluster_version
-    cluster_status = module.eks.cluster_status
-    cluster_oidc_issuer_url = module.eks.cluster_oidc_issuer_url
-    cluster_primary_security_group_id = module.eks.cluster_primary_security_group_id
-    cluster_security_group_id = module.eks.cluster_security_group_id
-    node_security_group_id = module.eks.node_security_group_id
-    cluster_iam_role_arn = module.eks.cluster_iam_role_arn
-    eks_managed_node_groups = module.eks.eks_managed_node_groups
+    cluster_id = module.EKS.cluster_id
+    cluster_arn = module.EKS.cluster_arn
+    cluster_name = module.EKS.cluster_name
+    cluster_endpoint = module.EKS.cluster_endpoint
+    cluster_version = module.EKS.cluster_version
+    cluster_status = module.EKS.cluster_status
+    cluster_oidc_issuer_url = module.EKS.cluster_oidc_issuer_url
+    cluster_primary_security_group_id = module.EKS.cluster_primary_security_group_id
+    cluster_security_group_id = module.EKS.cluster_security_group_id
+    node_security_group_id = module.EKS.node_security_group_id
+    cluster_iam_role_arn = module.EKS.cluster_iam_role_arn
+    eks_managed_node_groups = module.EKS.eks_managed_node_groups
   }
 }
 
-output "ec2-monitoring-heal-info" {
-  value = {
-    lambda_function_arn = module.ec2-monitoring-heal.lambda_function_arn
-    lambda_function_name = module.ec2-monitoring-heal.lambda_function_name
-    event_rule_arn = module.ec2-monitoring-heal.event_rule_arn
-    event_rule_name = module.ec2-monitoring-heal.event_rule_name
-    iam_role_arn = module.ec2-monitoring-heal.iam_role_arn
-    iam_role_name = module.ec2-monitoring-heal.iam_role_name
-  }
-}
+# 주석 처리된 모듈이므로 output도 주석 처리
+#output "ec2-monitoring-heal-info" {
+#  value = {
+#    lambda_function_arn = module.ec2-monitoring-heal.lambda_function_arn
+#    lambda_function_name = module.ec2-monitoring-heal.lambda_function_name
+#    event_rule_arn = module.ec2-monitoring-heal.event_rule_arn
+#    event_rule_name = module.ec2-monitoring-heal.event_rule_name
+#    iam_role_arn = module.ec2-monitoring-heal.iam_role_arn
+#    iam_role_name = module.ec2-monitoring-heal.iam_role_name
+#  }
+#}
 
 output "s3-public-block-info" {
   value = {
@@ -119,9 +120,9 @@ output "auroraDB-info" {
   value = {
     cluster_id = module.auroraDB.cluster_id
     cluster_arn = module.auroraDB.cluster_arn
-    cluster_name = module.auroraDB.cluster_name
     cluster_endpoint = module.auroraDB.cluster_endpoint
     cluster_reader_endpoint = module.auroraDB.cluster_reader_endpoint
+    cluster_database_name = module.auroraDB.cluster_database_name
   }
 }
 
@@ -129,9 +130,10 @@ output "go-to-deep-info" {
   value = {
     lambda_function_arn = module.go-to-deep.lambda_function_arn
     lambda_function_name = module.go-to-deep.lambda_function_name
+    lambda_role_arn = module.go-to-deep.lambda_role_arn
     event_rule_arn = module.go-to-deep.event_rule_arn
-    event_rule_name = module.go-to-deep.event_rule_name
-    iam_role_arn = module.go-to-deep.iam_role_arn
-    iam_role_name = module.go-to-deep.iam_role_name
+    s3_bucket_name = module.go-to-deep.s3_bucket_name
+    s3_bucket_arn = module.go-to-deep.s3_bucket_arn
+    aurora_export_role_arn = module.go-to-deep.aurora_export_role_arn
   }
 }
