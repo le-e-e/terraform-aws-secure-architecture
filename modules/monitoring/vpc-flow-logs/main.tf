@@ -2,8 +2,8 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 locals {
-  # 버킷 이름이 제공되지 않으면 자동 생성 (account_id + region 포함하여 전역 고유성 보장)
-  bucket_name = var.vpc_flow_logs_bucket_name != "" ? var.vpc_flow_logs_bucket_name : "${var.project_name}-vpc-flow-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"
+  auto_bucket_name = "${var.project_name}-vpc-flow-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}"
+  bucket_name      = var.vpc_flow_logs_bucket_name != "" ? var.vpc_flow_logs_bucket_name : local.auto_bucket_name
 }
 
 resource "aws_flow_log" "main" {
