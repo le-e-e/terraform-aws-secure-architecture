@@ -90,7 +90,7 @@ resource "aws_secretsmanager_secret_version" "master_password" {
 # 로컬 변수: 사용할 사용자명과 비밀번호 결정
 locals {
   final_username = var.master_username != null ? var.master_username : (var.enable_auto_password ? random_string.master_username[0].result : "admin")
-  final_password = var.master_password != null ? var.master_password : (var.enable_auto_password ? random_password.master_password[0].result : null)
+  final_password = var.master_password != null ? var.master_password : (var.enable_auto_password ? nonsensitive(random_password.master_password[0].result) : null)
   security_group_ids = var.create_security_group ? concat([aws_security_group.aurora[0].id], var.vpc_security_group_ids) : var.vpc_security_group_ids
 }
 

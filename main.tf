@@ -21,8 +21,14 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  # marked value 문제를 피하기 위해 account_id를 로컬 변수로 분리
-  account_id = data.aws_caller_identity.current.account_id
+  # marked value 문제를 피하기 위해 account_id를 로컬 변수로 분리하고 nonsensitive로 감싸기
+  account_id = nonsensitive(data.aws_caller_identity.current.account_id)
+  
+  # 조건부 표현식에서 marked value 사용 시 nonsensitive 필요
+  guardduty_kms_key_account_id = length(var.guardduty_kms_key_account_id) > 0 ? var.guardduty_kms_key_account_id : local.account_id
+  cloudwatch_to_s3_kms_key_account_id = length(var.cloudwatch_to_s3_account_id) > 0 ? var.cloudwatch_to_s3_account_id : local.account_id
+  cloudtrail_bucket_kms_key_account_id = length(var.cloudwatch_to_s3_account_id) > 0 ? var.cloudwatch_to_s3_account_id : local.account_id
+  config_delivery_channel_s3_bucket_kms_key_account_id = length(var.config_delivery_channel_s3_bucket_kms_key_account_id) > 0 ? var.config_delivery_channel_s3_bucket_kms_key_account_id : local.account_id
 }
 
 module "vpc" {
@@ -68,7 +74,7 @@ module "guardduty" {
   enable               = var.enable
   finding_publishing_frequency = var.finding_publishing_frequency
   guardduty_s3_bucket_name = var.guardduty_s3_bucket_name
-  guardduty_kms_key_account_id = var.guardduty_kms_key_account_id != "" ? var.guardduty_kms_key_account_id : local.account_id
+  guardduty_kms_key_account_id = local.guardduty_kms_key_account_id
   tags                 = var.tags
 }
 
@@ -78,7 +84,7 @@ module "cloudwatch_to_s3" {
   project_name                        = var.project_name
   log_group_name                      = var.log_group_name
   retention_in_days                   = var.retention_in_days
-  cloudwatch_to_s3_kms_key_account_id = var.cloudwatch_to_s3_account_id != "" ? var.cloudwatch_to_s3_account_id : local.account_id
+  cloudwatch_to_s3_kms_key_account_id = local.cloudwatch_to_s3_kms_key_account_id
   tags                                = var.tags
 }
 
@@ -89,7 +95,7 @@ module "cloudtrail" {
   cloudtrail_bucket_name              = var.cloudtrail_bucket_name
   cloudtrail_s3_key_prefix            = var.cloudtrail_s3_key_prefix
   cloudtrail_bucket_kms_key_arn        = var.cloudtrail_bucket_kms_key_arn
-  cloudtrail_bucket_kms_key_account_id = var.cloudwatch_to_s3_account_id != "" ? var.cloudwatch_to_s3_account_id : local.account_id
+  cloudtrail_bucket_kms_key_account_id = local.cloudtrail_bucket_kms_key_account_id
   tags                                = var.tags
 }
 
@@ -97,7 +103,7 @@ module "config" {
   source = "./modules/security/config"
 
   config_delivery_channel_s3_bucket_name = var.config_delivery_channel_s3_bucket_name
-  config_delivery_channel_s3_bucket_kms_key_account_id = var.config_delivery_channel_s3_bucket_kms_key_account_id != "" ? var.config_delivery_channel_s3_bucket_kms_key_account_id : local.account_id
+  config_delivery_channel_s3_bucket_kms_key_account_id = local.config_delivery_channel_s3_bucket_kms_key_account_id
   tags = var.tags
 }
 
