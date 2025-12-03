@@ -65,7 +65,6 @@ variable "kms_key_rotation" {
 }
 
 variable "vpc_flow_logs_bucket_name" {
-  description = "S3 bucket name for VPC Flow Logs. If empty, will be auto-generated with account_id and region for uniqueness"
   type        = string
-  default     = ""
+  default     = "vpc-flow-logs-bucket-withlee"
 }

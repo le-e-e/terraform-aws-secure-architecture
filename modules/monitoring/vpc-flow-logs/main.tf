@@ -1,10 +1,4 @@
 data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
-locals {
-  auto_bucket_name = "${var.project_name}-vpc-flow-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}"
-  bucket_name      = var.vpc_flow_logs_bucket_name != "" ? var.vpc_flow_logs_bucket_name : local.auto_bucket_name
-}
 
 resource "aws_flow_log" "main" {
   log_destination = aws_s3_bucket.vpc_flow_logs_bucket.arn
@@ -23,8 +17,8 @@ resource "aws_flow_log" "main" {
 }
 
 resource "aws_s3_bucket" "vpc_flow_logs_bucket" {
-  bucket = local.bucket_name
-
+  bucket = var.vpc_flow_logs_bucket_name
+  
   tags = merge(
     var.tags,
     {
