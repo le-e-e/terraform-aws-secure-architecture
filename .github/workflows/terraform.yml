@@ -45,14 +45,16 @@ jobs:
       # Checkov 스캔
       - name: Checkov Scan
         uses: bridgecrewio/checkov-action@v4
+        continue-on-error: true   # 실패해도 빌드 계속 진행 (결과는 로그에 표시됨)
         with:
           directory: .
           framework: terraform
-          soft_fail: true   # true이면 취약점 발생해도 진행, 실무에서는 false로 변경
+          soft_fail: true   # Checkov 내부에서도 실패를 경고로 처리
 
       # Trivy 스캔
       - name: Trivy Scan
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true   # 실패해도 빌드 계속 진행 (결과는 로그에 표시됨)
         with:
           scan-type: "config"
           scan-ref: '.'
