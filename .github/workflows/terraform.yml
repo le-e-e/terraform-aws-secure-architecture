@@ -1,0 +1,69 @@
+name: Terraform Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ap-northeast-2
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4   # 리포지토리 코드 가져오기
+
+
+      - name: AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::556663442070:role/gitaction_rolll
+          aws-region: ap-northeast-2
+
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3   # Terraform 설치
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        run: terraform init   # Terraform 초기화
+
+      - name: Terraform Validate
+        run: terraform validate   # 코드 문법 검사
+
+      # Checkov 스캔
+      - name: Checkov Scan
+        uses: bridgecrewio/checkov-action@v4
+        with:
+          directory: .
+          framework: terraform
+          soft_fail: false   # true이면 취약점 발생해도 진행, 실무에서는 false로 변경
+
+      # Trivy 스캔
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@v4
+        with:
+          scan-type: "config"
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1' # 0이면 검출해도 진행, 실무에서는 1로 변경 
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan   # 변경 사항 계산(plan 생성)
+
+# 실제 배포시 활성화
+      # - name: Terraform Apply
+      #   if: github.ref == 'refs/heads/main'
+      #   run: terraform apply -auto-approve tfplan
