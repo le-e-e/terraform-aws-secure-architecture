@@ -34,7 +34,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3   # Terraform 설치
         with:
-          terraform_version: 1.6.0
+          terraform_version: 1.5.7
 
       - name: Terraform Init
         run: terraform init   # Terraform 초기화
@@ -52,7 +52,7 @@ jobs:
 
       # Trivy 스캔
       - name: Trivy Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: "config"
           scan-ref: '.'
