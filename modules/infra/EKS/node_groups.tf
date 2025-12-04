@@ -274,7 +274,7 @@ module "eks_managed_node_group" {
 
   for_each = var.create && !local.create_outposts_local_cluster && var.eks_managed_node_groups != null ? var.eks_managed_node_groups : {}
 
-  create = each.value.create
+  create = coalesce(each.value.create, true)
 
   region = var.region
 
@@ -283,7 +283,7 @@ module "eks_managed_node_group" {
   account_id = local.account_id
 
   cluster_name       = time_sleep.this[0].triggers["name"]
-  kubernetes_version = each.value.kubernetes_version != null ? each.value.kubernetes_version : time_sleep.this[0].triggers["kubernetes_version"]
+  kubernetes_version = each.value.kubernetes_version
 
 
   # EKS Managed Node Group

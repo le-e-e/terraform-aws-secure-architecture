@@ -155,7 +155,7 @@ resource "aws_lambda_function" "go_to_deep" {
 
 data "archive_file" "go_to_deep" {
   type = "zip"
-  source_file = "${path.module}/go_to_deep.py"
+  source_file = "${path.module}/go-to-deep.py"
   output_path = "${path.module}/go_to_deep.zip"
 }
 

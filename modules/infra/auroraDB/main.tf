@@ -96,7 +96,7 @@ locals {
 
 # Aurora Cluster 생성
 resource "aws_rds_cluster" "main" {
-  cluster_identifier        = var.name
+  cluster_identifier        = lower(var.name)
   engine                    = var.engine
   engine_version            = var.engine_version
   database_name             = var.database_name
@@ -134,7 +134,7 @@ resource "aws_rds_cluster" "main" {
 
 # DB Subnet Group 생성
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.name}-subnet-group"
+  name       = lower("${var.name}-subnet-group")
   subnet_ids = var.subnet_ids
 
   tags = var.tags

@@ -206,3 +206,8 @@ variable "go-to-deep-backup-vault-name" {
   type        = string
   default     = "go-to-deep-backup-vault"
 }
+
+variable "iam-access-analyzer-name" {
+  type        = string
+  default     = "iam-access-analyzer"
+}

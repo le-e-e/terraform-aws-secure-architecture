@@ -21,8 +21,8 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  # marked value 문제를 피하기 위해 account_id를 로컬 변수로 분리하고 nonsensitive로 감싸기
-  account_id = nonsensitive(data.aws_caller_identity.current.account_id)
+  # marked value 문제를 피하기 위해 account_id를 로컬 변수로 분리
+  account_id = data.aws_caller_identity.current.account_id
 }
 
 module "vpc" {
@@ -50,6 +50,7 @@ module "EKS" {
 
   eks_managed_node_groups = {
     example = {
+      kubernetes_version = null  # 명시적으로 null 설정하여 클러스터 버전 사용
       instance_types = ["t3.small"]
       capacity_type = "SPOT"
       min_size     = 1
@@ -166,5 +167,10 @@ module "vpc_flow_logs" {
 
   project_name = var.project_name
   vpc_id = module.vpc.vpc_id
+  tags = var.tags
+}
+
+module "iam-access-analyzer" {
+  source = "./modules/security/iam-access-analyzer"
   tags = var.tags
 }

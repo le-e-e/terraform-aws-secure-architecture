@@ -137,3 +137,10 @@ output "go-to-deep-info" {
     aurora_export_role_arn = module.go-to-deep.aurora_export_role_arn
   }
 }
+
+output "iam-access-analyzer-info" {
+  value = {
+    analyzer_name = module.iam-access-analyzer.analyzer_name
+    analyzer_arn  = module.iam-access-analyzer.analyzer_arn
+  }
+}

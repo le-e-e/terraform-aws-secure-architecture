@@ -1,5 +1,5 @@
 resource "aws_backup_vault" "aurora_backup" {
-  name        = "${var.name}-backup-vault"
+  name        = "${substr(var.name, 0, 37)}-backup-vault"
   kms_key_arn = aws_kms_key.backup_vault.arn
 
   tags = var.tags
@@ -67,7 +67,7 @@ resource "aws_backup_plan" "aurora_backup" {
 # 4. Backup Selection (Aurora 클러스터 선택)
 resource "aws_backup_selection" "aurora_backup" {
   iam_role_arn = aws_iam_role.backup_role.arn
-  name         = "${var.name}-backup-selection"
+  name         = "${substr(var.name, 0, 32)}-backup-selection"
   plan_id      = aws_backup_plan.aurora_backup.id
 
   resources = [

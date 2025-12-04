@@ -94,8 +94,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "vpc_flow_logs_bucket" {
     dynamic "expiration" {
       for_each = var.lifecycle_expiration_days > 0 ? [1] : []
       content {
-        days                        = var.lifecycle_expiration_days
-        expired_object_delete_marker = true
+        days = var.lifecycle_expiration_days
       }
     }
   }

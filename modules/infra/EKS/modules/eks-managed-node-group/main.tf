@@ -394,7 +394,8 @@ data "aws_eks_cluster_versions" "this" {
 
 locals {
   # Just to ensure templating doesn't fail when values are not provided
-  ssm_kubernetes_version = var.kubernetes_version != null ? var.kubernetes_version : try(data.aws_eks_cluster_versions.this[0].cluster_versions[0].cluster_version, "UNSPECIFIED")
+  # kubernetes_version이 null이면 최신 버전을 사용하고, 그렇지 않으면 지정된 버전 사용
+  ssm_kubernetes_version = var.kubernetes_version != null && var.kubernetes_version != "" ? var.kubernetes_version : try(data.aws_eks_cluster_versions.this[0].cluster_versions[0].cluster_version, "UNSPECIFIED")
   ssm_ami_type           = var.ami_type != null ? var.ami_type : ""
 
   # Map the AMI type to the respective SSM param path
@@ -467,7 +468,7 @@ resource "aws_eks_node_group" "this" {
   # https://docs.aws.amazon.com/eks/latest/userguide/launch-templates.html#launch-template-custom-ami
   ami_type        = var.ami_id != "" ? null : var.ami_type
   release_version = var.ami_id != "" ? null : var.use_latest_ami_release_version ? local.latest_ami_release_version : var.ami_release_version
-  version         = var.ami_id != "" ? null : var.kubernetes_version
+  version         = var.ami_id != "" ? null : (var.kubernetes_version != null && var.kubernetes_version != "" ? var.kubernetes_version : null)
 
   capacity_type        = var.capacity_type
   disk_size            = var.use_custom_launch_template ? null : var.disk_size # if using a custom LT, set disk size on custom LT or else it will error here
