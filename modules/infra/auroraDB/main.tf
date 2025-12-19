@@ -3,25 +3,22 @@ resource "aws_security_group" "aurora" {
   count = var.create_security_group ? 1 : 0
 
   name        = "${var.name}-sg"
-  description = "Security group for Aurora DB"
   vpc_id      = var.vpc_id
 
-  # 인바운드: MySQL/Aurora 포트 (3306) - VPC 내부에서만 접근
+  # VPC 내부에서만 접근
   ingress {
-    description = "MySQL/Aurora from VPC"
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
 
-  # 아웃바운드: 모든 트래픽 허용
+  # eks 내의 웹 서버와 통신만 허용
   egress {
-    description = "All outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = merge(
@@ -42,7 +39,6 @@ resource "aws_security_group_rule" "aurora_from_eks" {
   protocol                 = "tcp"
   source_security_group_id = var.allowed_security_group_ids[count.index]
   security_group_id        = aws_security_group.aurora[0].id
-  description              = "MySQL/Aurora access from allowed security group"
 }
 
 # 사용자명 자동 생성 (선택적)

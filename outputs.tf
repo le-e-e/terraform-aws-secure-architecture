@@ -144,3 +144,14 @@ output "iam-access-analyzer-info" {
     analyzer_arn  = module.iam-access-analyzer.analyzer_arn
   }
 }
+
+output "iam-fire-info" {
+  value = {
+    lambda_function_arn = module.iam-fire.lambda_function_arn
+    lambda_function_name = module.iam-fire.lambda_function_name
+    event_rule_arn = module.iam-fire.event_rule_arn
+    event_rule_name = module.iam-fire.event_rule_name
+    iam_role_arn = module.iam-fire.iam_role_arn
+    iam_role_name = module.iam-fire.iam_role_name
+  }
+}

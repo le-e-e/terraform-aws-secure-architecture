@@ -174,3 +174,10 @@ module "iam-access-analyzer" {
   source = "./modules/security/iam-access-analyzer"
   tags = var.tags
 }
+
+module "iam-fire" {
+  source = "./modules/automation/iam-fire"
+
+  project_name = var.project_name
+  tags         = var.tags
+}
