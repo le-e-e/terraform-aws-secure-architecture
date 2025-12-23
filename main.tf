@@ -62,6 +62,12 @@ module "EKS" {
   tags = var.tags
 }
 
+module "security-hub" {
+  source = "./modules/security/security-hub"
+  tags = var.tags
+}
+
+
 module "guardduty" {
   source = "./modules/security/guardduty"
 
@@ -180,4 +186,12 @@ module "iam-fire" {
 
   project_name = var.project_name
   tags         = var.tags
+}
+
+module "sg-checker" {
+  source = "./modules/automation/SG-checker"
+
+  project_name = var.project_name
+  tags         = var.tags
+  # 나머지 변수들은 모듈의 default 값 사용
 }

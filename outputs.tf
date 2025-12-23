@@ -155,3 +155,14 @@ output "iam-fire-info" {
     iam_role_name = module.iam-fire.iam_role_name
   }
 }
+
+output "sg-checker-info" {
+  value = {
+    lambda_function_arn = module.sg-checker.lambda_function_arn
+    lambda_function_name = module.sg-checker.lambda_function_name
+    event_rule_arn = module.sg-checker.event_rule_arn
+    event_rule_name = module.sg-checker.event_rule_name
+    iam_role_arn = module.sg-checker.iam_role_arn
+    iam_role_name = module.sg-checker.iam_role_name
+  }
+}
