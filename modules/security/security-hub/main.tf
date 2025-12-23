@@ -1,13 +1,13 @@
-resource "aws_security_hub_account" "security-hub" {
+resource "aws_securityhub_account" "security-hub" {
   tags = var.tags
 }
 
-resource "aws_security_hub_standards_subscription" "SH_sub_standards" {
+resource "aws_securityhub_standards_subscription" "SH_sub_standards" {
   standards_arn = "arn:aws:securityhub:::standards/aws-foundational-security-best-practices/v/1.0.0"
   tags = var.tags
 }
 
-resource "aws_security_hub_standards_subscription" "SH_sub_cis" {
+resource "aws_securityhub_standards_subscription" "SH_sub_cis" {
   standards_arn = "arn:aws:securityhub:::standards/cis-aws-foundations-benchmark/v/1.0.0"
   tags = var.tags
 }
@@ -23,7 +23,7 @@ resource "aws_cloudwatch_event_rule" "SH_log" {
 
 resource "aws_cloudwatch_event_target" "SH_log_target" {
   rule = aws_cloudwatch_event_rule.SH_log.name
-  arn = aws_security_hub_account.security-hub.arn
+  arn = aws_securityhub_account.security-hub.arn
   target_id = "security-hub"
 }
 

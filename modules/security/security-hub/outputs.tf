@@ -1,21 +1,21 @@
 output "security_hub_account_arn" {
   description = "Security Hub Account ARN"
-  value       = aws_security_hub_account.security-hub.arn
+  value       = aws_securityhub_account.security-hub.arn
 }
 
 output "security_hub_account_id" {
   description = "Security Hub Account ID"
-  value       = aws_security_hub_account.security-hub.id
+  value       = aws_securityhub_account.security-hub.id
 }
 
 output "aws_foundational_standards_subscription_id" {
   description = "AWS Foundational Security Best Practices Standards Subscription ID"
-  value       = aws_security_hub_standards_subscription.SH_sub_standards.id
+  value       = aws_securityhub_standards_subscription.SH_sub_standards.id
 }
 
 output "cis_standards_subscription_id" {
   description = "CIS AWS Foundations Benchmark Standards Subscription ID"
-  value       = aws_security_hub_standards_subscription.SH_sub_cis.id
+  value       = aws_securityhub_standards_subscription.SH_sub_cis.id
 }
 
 output "event_rule_arn" {
