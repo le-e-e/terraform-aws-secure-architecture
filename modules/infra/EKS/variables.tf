@@ -1558,3 +1558,25 @@ variable "aurora_db_config" {
   })
   default = null
 }
+
+################################################################################
+# External Secrets Operator
+################################################################################
+
+variable "enable_external_secrets" {
+  description = "Enable External Secrets Operator installation"
+  type        = bool
+  default     = false
+}
+
+variable "external_secrets_namespace" {
+  description = "Namespace for External Secrets Operator"
+  type        = string
+  default     = "external-secrets"
+}
+
+variable "external_secrets_helm_chart_version" {
+  description = "External Secrets Operator Helm chart version"
+  type        = string
+  default     = "0.10.0"
+}

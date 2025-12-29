@@ -274,3 +274,17 @@ output "self_managed_node_groups_autoscaling_group_names" {
   description = "List of the autoscaling group names created by self-managed node groups"
   value       = compact([for group in module.self_managed_node_group : group.autoscaling_group_name])
 }
+
+################################################################################
+# External Secrets Operator
+################################################################################
+
+output "external_secrets_namespace" {
+  description = "External Secrets Operator namespace"
+  value       = var.enable_external_secrets ? var.external_secrets_namespace : null
+}
+
+output "external_secrets_service_account_name" {
+  description = "External Secrets Operator service account name"
+  value       = var.enable_external_secrets ? "external-secrets" : null
+}

@@ -973,7 +973,7 @@ locals {
 }
 
 # ArgoCD 네임스페이스 생성
-resource "kubernetes_namespace" "argocd" {
+resource "kubernetes_namespace_v1" "argocd" {
   count = local.create && var.enable_argocd ? 1 : 0
 
   metadata {
@@ -994,7 +994,7 @@ resource "helm_release" "argocd" {
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
   version    = var.argocd_helm_chart_version
-  namespace  = kubernetes_namespace.argocd[0].metadata[0].name
+  namespace  = kubernetes_namespace_v1.argocd[0].metadata[0].name
 
   values = [
     local.argocd_values
@@ -1009,7 +1009,136 @@ resource "helm_release" "argocd" {
   depends_on = [
     aws_eks_cluster.this,
     aws_eks_addon.this,
-    kubernetes_namespace.argocd,
+    kubernetes_namespace_v1.argocd,
+  ]
+}
+
+################################################################################
+# External Secrets Operator
+################################################################################
+
+# External Secrets Operator 네임스페이스 생성
+resource "kubernetes_namespace_v1" "external_secrets" {
+  count = local.create && var.enable_external_secrets ? 1 : 0
+
+  metadata {
+    name = var.external_secrets_namespace
+    labels = {
+      name = var.external_secrets_namespace
+    }
+  }
+
+  depends_on = [aws_eks_cluster.this]
+}
+
+# External Secrets Operator Helm Chart 설치
+resource "helm_release" "external_secrets" {
+  count = local.create && var.enable_external_secrets ? 1 : 0
+
+  name       = "external-secrets"
+  repository = "https://charts.external-secrets.io"
+  chart      = "external-secrets"
+  version    = var.external_secrets_helm_chart_version
+  namespace  = kubernetes_namespace_v1.external_secrets[0].metadata[0].name
+
+  values = [
+    yamlencode({
+      installCRDs = true
+    })
+  ]
+
+  timeout = 600
+  wait    = true
+
+  depends_on = [
+    aws_eks_cluster.this,
+    aws_eks_addon.this,
+    kubernetes_namespace_v1.external_secrets,
+  ]
+}
+
+# External Secrets Operator용 IRSA (IAM Roles for Service Accounts)
+# AWS Secrets Manager 접근 권한
+data "aws_iam_policy_document" "external_secrets_operator" {
+  count = local.create && var.enable_external_secrets ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret"
+    ]
+    resources = var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn != null ? [
+      var.aurora_db_config.master_password_secret_arn
+    ] : ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:ListSecrets"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "external_secrets_operator" {
+  count = local.create && var.enable_external_secrets ? 1 : 0
+
+  name        = "${var.name}-external-secrets-operator"
+  description = "Policy for External Secrets Operator to access AWS Secrets Manager"
+  policy      = data.aws_iam_policy_document.external_secrets_operator[0].json
+
+  tags = var.tags
+}
+
+resource "aws_iam_role" "external_secrets_operator" {
+  count = local.create && var.enable_external_secrets ? 1 : 0
+
+  name_prefix = "${substr(var.name, 0, 20)}-ext-sec-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.oidc_provider[0].arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_eks_cluster.this[0].identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:${var.external_secrets_namespace}:external-secrets"
+          "${replace(aws_eks_cluster.this[0].identity[0].oidc[0].issuer, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "external_secrets_operator" {
+  count = local.create && var.enable_external_secrets ? 1 : 0
+
+  role       = aws_iam_role.external_secrets_operator[0].name
+  policy_arn = aws_iam_policy.external_secrets_operator[0].arn
+}
+
+# Kubernetes ServiceAccount에 IAM Role 연결
+resource "kubernetes_service_account_v1" "external_secrets" {
+  count = local.create && var.enable_external_secrets ? 1 : 0
+
+  metadata {
+    name      = "external-secrets"
+    namespace = kubernetes_namespace_v1.external_secrets[0].metadata[0].name
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.external_secrets_operator[0].arn
+    }
+  }
+
+  depends_on = [
+    aws_iam_role.external_secrets_operator,
+    helm_release.external_secrets,
   ]
 }
 
@@ -1018,33 +1147,9 @@ resource "helm_release" "argocd" {
 ################################################################################
 
 # ArgoCD Repository CRD 생성 (Git 레포지토리 등록)
-resource "kubernetes_manifest" "argocd_repositories" {
-  for_each = local.create && var.enable_argocd ? {
-    for repo in var.argocd_repositories : repo.name => repo
-  } : {}
-
-  manifest = {
-    apiVersion = "v1alpha1"
-    kind       = "Repository"
-    metadata = {
-      name      = each.value.name
-      namespace = var.argocd_namespace
-      labels = {
-        "app.kubernetes.io/part-of" = "argocd"
-      }
-    }
-    spec = {
-      type     = each.value.type
-      repo     = each.value.url
-      username = each.value.username
-      password = each.value.password
-      sshPrivateKey = each.value.ssh_private_key
-      insecure = each.value.insecure
-    }
-  }
-
-  depends_on = [helm_release.argocd]
-}
+# 주의: kubernetes_manifest는 provider 설정이 필요하므로
+# ArgoCD 설치 후 수동으로 등록하거나 별도로 관리
+# 또는 ArgoCD Application에서 직접 repoURL 지정 가능
 
 ################################################################################
 # Kubernetes Resources for Aurora DB
@@ -1053,7 +1158,7 @@ resource "kubernetes_manifest" "argocd_repositories" {
 ################################################################################
 
 # Aurora DB 연결 정보를 담은 ConfigMap
-resource "kubernetes_config_map" "aurora_db_config" {
+resource "kubernetes_config_map_v1" "aurora_db_config" {
   count = local.create && var.aurora_db_config != null ? 1 : 0
 
   metadata {
@@ -1074,20 +1179,68 @@ resource "kubernetes_config_map" "aurora_db_config" {
   depends_on = [aws_eks_cluster.this]
 }
 
-# AWS Secrets Manager에서 비밀번호 가져오기
-data "aws_secretsmanager_secret" "aurora_master_password" {
-  count = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn != null ? 1 : 0
-  arn   = var.aurora_db_config.master_password_secret_arn
+# Aurora DB 자격증명 Secret 생성
+# External Secrets Operator를 사용하여 AWS Secrets Manager에서 자동으로 동기화
+locals {
+  has_aurora_config = local.create && var.aurora_db_config != null
+  has_secrets_manager_arn = local.has_aurora_config && var.aurora_db_config.master_password_secret_arn != null && var.aurora_db_config.master_password_secret_arn != ""
 }
 
-data "aws_secretsmanager_secret_version" "aurora_master_password" {
-  count     = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn != null ? 1 : 0
-  secret_id = data.aws_secretsmanager_secret.aurora_master_password[0].id
+# External Secrets Operator SecretStore 및 ExternalSecret
+# 주의: kubernetes_manifest는 provider 설정이 필요하므로 모듈 내부에서는 생성 불가
+# 아래 YAML을 ArgoCD 또는 수동으로 배포하거나, root 모듈에서 생성 필요
+#
+# SecretStore 예제 (kubectl apply 또는 ArgoCD로 배포):
+# ---
+# apiVersion: external-secrets.io/v1beta1
+# kind: SecretStore
+# metadata:
+#   name: aws-secrets-manager
+#   namespace: default
+# spec:
+#   provider:
+#     aws:
+#       service: SecretsManager
+#       region: ${var.region}
+#       auth:
+#         jwt:
+#           serviceAccountRef:
+#             name: external-secrets
+#             namespace: ${var.external_secrets_namespace}
+#
+# ExternalSecret 예제 (kubectl apply 또는 ArgoCD로 배포):
+# ---
+# apiVersion: external-secrets.io/v1beta1
+# kind: ExternalSecret
+# metadata:
+#   name: aurora-db-credentials
+#   namespace: default
+# spec:
+#   refreshInterval: 1h
+#   secretStoreRef:
+#     name: aws-secrets-manager
+#     kind: SecretStore
+#   target:
+#     name: aurora-db-credentials
+#     creationPolicy: Owner
+#   data:
+#     - secretKey: DB_USER
+#       remoteRef:
+#         key: ${var.aurora_db_config.master_password_secret_arn}
+#         property: username
+#     - secretKey: DB_PASSWORD
+#       remoteRef:
+#         key: ${var.aurora_db_config.master_password_secret_arn}
+#         property: password
+
+# 기본 Secret (External Secrets Operator 미사용 시 또는 Secrets Manager ARN이 없을 때)
+# 주의: has_secrets_manager_arn이 apply 시점에 결정되므로 조건 단순화
+locals {
+  create_default_secret = local.has_aurora_config && !var.enable_external_secrets
 }
 
-# Aurora DB 자격증명 Secret (Secrets Manager 사용 시)
-resource "kubernetes_secret" "aurora_db_credentials_with_password" {
-  count = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn != null ? 1 : 0
+resource "kubernetes_secret_v1" "aurora_db_credentials" {
+  count = local.create_default_secret ? 1 : 0
 
   metadata {
     name      = "aurora-db-credentials"
@@ -1097,33 +1250,10 @@ resource "kubernetes_secret" "aurora_db_credentials_with_password" {
     }
   }
 
-  data = {
-    DB_USER     = base64encode(jsondecode(data.aws_secretsmanager_secret_version.aurora_master_password[0].secret_string)["username"])
-    DB_PASSWORD = base64encode(jsondecode(data.aws_secretsmanager_secret_version.aurora_master_password[0].secret_string)["password"])
-  }
-
-  type = "Opaque"
-
-  depends_on = [
-    aws_eks_cluster.this,
-    data.aws_secretsmanager_secret_version.aurora_master_password
-  ]
-}
-
-# Aurora DB 자격증명 Secret (기본값, Secrets Manager 미사용 시)
-resource "kubernetes_secret" "aurora_db_credentials" {
-  count = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn == null ? 1 : 0
-
-  metadata {
-    name      = "aurora-db-credentials"
-    namespace = "default"
-    labels = {
-      app = "aurora-db"
-    }
-  }
-
+  # 기본값만 설정, External Secrets Operator 사용 시 자동으로 덮어씌워짐
   data = {
     DB_USER = base64encode("admin")  # 기본값, 실제 사용자명으로 변경 필요
+    # DB_PASSWORD는 External Secrets Operator 또는 수동으로 설정 필요
   }
 
   type = "Opaque"

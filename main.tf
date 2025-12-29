@@ -26,6 +26,23 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Kubernetes Provider 설정 (EKS 클러스터 생성 후)
+# 주의: provider 블록에서 모듈 output을 참조하지만, Terraform이 apply 시점에 처리
+provider "kubernetes" {
+  host                   = try(module.EKS.cluster_endpoint, "")
+  cluster_ca_certificate = try(base64decode(module.EKS.cluster_certificate_authority_data), "")
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args = [
+      "eks",
+      "get-token",
+      "--cluster-name",
+      try(module.EKS.cluster_name, "")
+    ]
+  }
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {
@@ -83,6 +100,9 @@ module "EKS" {
       # ssh_private_key = var.gitops_repo_ssh_key
     }
   ]
+
+  # External Secrets Operator 설정
+  enable_external_secrets = true
 
   # Aurora DB 정보 (Kubernetes Secret/ConfigMap 생성용)
   # Aurora DB 모듈이 생성된 후에 전달됨
@@ -228,4 +248,108 @@ module "sg-checker" {
 
   project_name = var.project_name
   tags         = var.tags
+}
+
+################################################################################
+# External Secrets Operator - SecretStore & ExternalSecret
+################################################################################
+
+# SecretStore 및 ExternalSecret 배포
+# 주의: kubernetes_manifest는 plan 시점에 provider 초기화를 시도하므로
+# null_resource와 kubectl을 사용하여 apply 시점에만 배포
+locals {
+  secretstore_yaml = <<-YAML
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: aws-secrets-manager
+  namespace: default
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: ${var.aws_region}
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: ${module.EKS.external_secrets_service_account_name}
+            namespace: ${module.EKS.external_secrets_namespace}
+YAML
+
+  externalsecret_yaml = module.auroraDB.master_password_secret_arn != null ? (
+    <<-YAML
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: aurora-db-credentials
+  namespace: default
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: SecretStore
+  target:
+    name: aurora-db-credentials
+    creationPolicy: Owner
+  data:
+    - secretKey: DB_USER
+      remoteRef:
+        key: ${module.auroraDB.master_password_secret_arn}
+        property: username
+    - secretKey: DB_PASSWORD
+      remoteRef:
+        key: ${module.auroraDB.master_password_secret_arn}
+        property: password
+YAML
+  ) : ""
+}
+
+# SecretStore 배포
+resource "null_resource" "external_secrets_secret_store" {
+  count = module.EKS.external_secrets_namespace != null ? 1 : 0
+
+  triggers = {
+    yaml = local.secretstore_yaml
+    cluster_name = module.EKS.cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${module.EKS.cluster_name} --region ${var.aws_region}
+      kubectl apply -f - <<EOF
+${local.secretstore_yaml}
+EOF
+    EOT
+  }
+
+  depends_on = [module.EKS]
+}
+
+# ExternalSecret 배포
+# 주의: master_password_secret_arn이 apply 시점에 결정되므로 조건 단순화
+resource "null_resource" "external_secret_aurora_db" {
+  count = module.EKS.external_secrets_namespace != null ? 1 : 0
+
+  triggers = {
+    yaml = local.externalsecret_yaml
+    cluster_name = module.EKS.cluster_name
+    # secret_arn은 apply 시점에 결정되므로 triggers에서 제외
+  }
+
+  provisioner "local-exec" {
+    command = local.externalsecret_yaml != "" ? (
+      <<-EOT
+        aws eks update-kubeconfig --name ${module.EKS.cluster_name} --region ${var.aws_region}
+        kubectl apply -f - <<EOF
+${local.externalsecret_yaml}
+EOF
+      EOT
+    ) : "echo 'Skipping ExternalSecret: master_password_secret_arn is null'"
+  }
+
+  depends_on = [
+    null_resource.external_secrets_secret_store,
+    module.EKS,
+    module.auroraDB
+  ]
 }
