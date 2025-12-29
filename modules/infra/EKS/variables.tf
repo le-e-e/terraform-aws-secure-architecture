@@ -1488,3 +1488,73 @@ variable "putin_khuylo" {
   type        = bool
   default     = true
 }
+
+################################################################################
+# ArgoCD
+################################################################################
+
+variable "enable_argocd" {
+  description = "Enable ArgoCD installation on EKS cluster"
+  type        = bool
+  default     = false
+}
+
+variable "argocd_namespace" {
+  description = "Namespace for ArgoCD installation"
+  type        = string
+  default     = "argocd"
+}
+
+variable "argocd_helm_chart_version" {
+  description = "ArgoCD Helm chart version"
+  type        = string
+  default     = "7.6.8"
+}
+
+variable "argocd_image_tag" {
+  description = "ArgoCD image tag"
+  type        = string
+  default     = "v2.10.0"
+}
+
+variable "argocd_server_service_type" {
+  description = "ArgoCD server service type (LoadBalancer, NodePort, ClusterIP)"
+  type        = string
+  default     = "LoadBalancer"
+}
+
+variable "argocd_server_insecure" {
+  description = "Enable insecure mode for ArgoCD server (for development)"
+  type        = bool
+  default     = false
+}
+
+variable "argocd_repositories" {
+  description = "List of Git repositories to register in ArgoCD"
+  type = list(object({
+    name     = string
+    url      = string
+    type     = optional(string, "git")
+    username = optional(string)
+    password = optional(string, null)
+    ssh_private_key = optional(string, null)
+    insecure = optional(bool, false)
+  }))
+  default = []
+}
+
+################################################################################
+# Aurora DB Configuration for Kubernetes Resources
+################################################################################
+
+variable "aurora_db_config" {
+  description = "Aurora DB configuration for creating Kubernetes Secret/ConfigMap"
+  type = object({
+    cluster_endpoint         = string
+    cluster_reader_endpoint  = string
+    cluster_port             = number
+    cluster_database_name    = string
+    master_password_secret_arn = optional(string, null)
+  })
+  default = null
+}

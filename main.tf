@@ -10,12 +10,20 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.1"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.0"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = ">= 2.0"
+    }
   }
 }
 
 # 엑세스는 aws configure로 이용
 provider "aws" {
-  region     = var.aws_region
+  region = var.aws_region
 }
 
 data "aws_caller_identity" "current" {}
@@ -57,6 +65,33 @@ module "EKS" {
       max_size     = 3
       desired_size = 2
     }
+  }
+
+  # ArgoCD 설정
+  enable_argocd = true
+  argocd_server_service_type = "LoadBalancer"
+  
+  # ArgoCD Git 레포지토리 등록 (자동화)
+  argocd_repositories = [
+    {
+      name = "gitops-repo"
+      url  = "https://github.com/your-org/gitops-repo.git"  # 실제 GitOps 저장소 URL로 변경
+      type = "git"
+      # username = "git"  # Private 레포지토리인 경우
+      # password = var.gitops_repo_token  # Personal Access Token 등
+      # 또는 SSH 사용 시:
+      # ssh_private_key = var.gitops_repo_ssh_key
+    }
+  ]
+
+  # Aurora DB 정보 (Kubernetes Secret/ConfigMap 생성용)
+  # Aurora DB 모듈이 생성된 후에 전달됨
+  aurora_db_config = {
+    cluster_endpoint           = module.auroraDB.cluster_endpoint
+    cluster_reader_endpoint    = module.auroraDB.cluster_reader_endpoint
+    cluster_port               = module.auroraDB.cluster_port
+    cluster_database_name      = module.auroraDB.cluster_database_name
+    master_password_secret_arn = module.auroraDB.master_password_secret_arn
   }
 
   tags = var.tags
@@ -193,5 +228,4 @@ module "sg-checker" {
 
   project_name = var.project_name
   tags         = var.tags
-  # 나머지 변수들은 모듈의 default 값 사용
 }

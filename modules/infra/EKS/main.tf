@@ -30,6 +30,11 @@ locals {
 }
 
 ################################################################################
+# Kubernetes & Helm Providers for ArgoCD
+# 모듈 내부에서 사용하지만, root 모듈의 provider 설정을 상속받음
+################################################################################
+
+################################################################################
 # Cluster
 ################################################################################
 
@@ -928,4 +933,200 @@ resource "aws_iam_role_policy_attachment" "eks_auto_additional" {
 
   policy_arn = each.value
   role       = aws_iam_role.eks_auto[0].name
+}
+
+################################################################################
+# ArgoCD
+################################################################################
+
+locals {
+  argocd_values = yamlencode({
+    global = {
+      image = {
+        tag = var.argocd_image_tag
+      }
+    }
+    server = {
+      service = {
+        type = var.argocd_server_service_type
+      }
+      extraArgs = var.argocd_server_insecure ? ["--insecure"] : []
+    }
+    configs = {
+      params = {
+        "server.insecure" = var.argocd_server_insecure
+      }
+    }
+    controller = {
+      replicas = 1
+    }
+    repoServer = {
+      replicas = 1
+    }
+    applicationSet = {
+      enabled = true
+    }
+    redis = {
+      enabled = true
+    }
+  })
+}
+
+# ArgoCD 네임스페이스 생성
+resource "kubernetes_namespace" "argocd" {
+  count = local.create && var.enable_argocd ? 1 : 0
+
+  metadata {
+    name = var.argocd_namespace
+    labels = {
+      name = var.argocd_namespace
+    }
+  }
+
+  depends_on = [aws_eks_cluster.this]
+}
+
+# ArgoCD Helm Chart 설치 (Terraform Helm Provider 사용)
+resource "helm_release" "argocd" {
+  count = local.create && var.enable_argocd ? 1 : 0
+
+  name       = "argocd"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argo-cd"
+  version    = var.argocd_helm_chart_version
+  namespace  = kubernetes_namespace.argocd[0].metadata[0].name
+
+  values = [
+    local.argocd_values
+  ]
+
+  # Helm 차트 업그레이드 시 대기 시간
+  timeout = 600
+
+  # 리소스가 준비될 때까지 대기
+  wait = true
+
+  depends_on = [
+    aws_eks_cluster.this,
+    aws_eks_addon.this,
+    kubernetes_namespace.argocd,
+  ]
+}
+
+################################################################################
+# ArgoCD Repository Registration
+################################################################################
+
+# ArgoCD Repository CRD 생성 (Git 레포지토리 등록)
+resource "kubernetes_manifest" "argocd_repositories" {
+  for_each = local.create && var.enable_argocd ? {
+    for repo in var.argocd_repositories : repo.name => repo
+  } : {}
+
+  manifest = {
+    apiVersion = "v1alpha1"
+    kind       = "Repository"
+    metadata = {
+      name      = each.value.name
+      namespace = var.argocd_namespace
+      labels = {
+        "app.kubernetes.io/part-of" = "argocd"
+      }
+    }
+    spec = {
+      type     = each.value.type
+      repo     = each.value.url
+      username = each.value.username
+      password = each.value.password
+      sshPrivateKey = each.value.ssh_private_key
+      insecure = each.value.insecure
+    }
+  }
+
+  depends_on = [helm_release.argocd]
+}
+
+################################################################################
+# Kubernetes Resources for Aurora DB
+# 주의: 이 리소스들은 root 모듈에서 Aurora DB 정보를 받아서 생성
+# root 모듈에서 var.aurora_db_config로 전달 필요
+################################################################################
+
+# Aurora DB 연결 정보를 담은 ConfigMap
+resource "kubernetes_config_map" "aurora_db_config" {
+  count = local.create && var.aurora_db_config != null ? 1 : 0
+
+  metadata {
+    name      = "aurora-db-config"
+    namespace = "default"
+    labels = {
+      app = "aurora-db"
+    }
+  }
+
+  data = {
+    DB_HOST        = var.aurora_db_config.cluster_endpoint
+    DB_READER_HOST = var.aurora_db_config.cluster_reader_endpoint
+    DB_PORT        = tostring(var.aurora_db_config.cluster_port)
+    DB_NAME        = var.aurora_db_config.cluster_database_name
+  }
+
+  depends_on = [aws_eks_cluster.this]
+}
+
+# AWS Secrets Manager에서 비밀번호 가져오기
+data "aws_secretsmanager_secret" "aurora_master_password" {
+  count = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn != null ? 1 : 0
+  arn   = var.aurora_db_config.master_password_secret_arn
+}
+
+data "aws_secretsmanager_secret_version" "aurora_master_password" {
+  count     = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn != null ? 1 : 0
+  secret_id = data.aws_secretsmanager_secret.aurora_master_password[0].id
+}
+
+# Aurora DB 자격증명 Secret (Secrets Manager 사용 시)
+resource "kubernetes_secret" "aurora_db_credentials_with_password" {
+  count = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn != null ? 1 : 0
+
+  metadata {
+    name      = "aurora-db-credentials"
+    namespace = "default"
+    labels = {
+      app = "aurora-db"
+    }
+  }
+
+  data = {
+    DB_USER     = base64encode(jsondecode(data.aws_secretsmanager_secret_version.aurora_master_password[0].secret_string)["username"])
+    DB_PASSWORD = base64encode(jsondecode(data.aws_secretsmanager_secret_version.aurora_master_password[0].secret_string)["password"])
+  }
+
+  type = "Opaque"
+
+  depends_on = [
+    aws_eks_cluster.this,
+    data.aws_secretsmanager_secret_version.aurora_master_password
+  ]
+}
+
+# Aurora DB 자격증명 Secret (기본값, Secrets Manager 미사용 시)
+resource "kubernetes_secret" "aurora_db_credentials" {
+  count = local.create && var.aurora_db_config != null && var.aurora_db_config.master_password_secret_arn == null ? 1 : 0
+
+  metadata {
+    name      = "aurora-db-credentials"
+    namespace = "default"
+    labels = {
+      app = "aurora-db"
+    }
+  }
+
+  data = {
+    DB_USER = base64encode("admin")  # 기본값, 실제 사용자명으로 변경 필요
+  }
+
+  type = "Opaque"
+
+  depends_on = [aws_eks_cluster.this]
 }
